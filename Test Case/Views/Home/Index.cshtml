@@ -1,0 +1,139 @@
+﻿@{
+    ViewData["Title"] = "Home Page";
+}
+
+<div class="text-center">
+    <h1 class="display-5">Кредитный калькулятор для аннуитетных займов</h1>
+    <form class="input_wrapper">
+        <input type="number" min="" name="loan-amount" required placeholder="Сумма займа" />
+        <input type="number" min="1" max="3600" name="loan-term" pattern="[^.,]" required placeholder="Срок займа (в месяцах)" />
+        <input type="number" min="0" max="100" name="loan-interest" required placeholder="Ставка (в год)" />
+        <input type="submit" id="calc-btn" value="Рассчитать" />
+    </form>
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">№</th>
+                <th scope="col">Дата платежа</th>
+                <th scope="col">Сумма платежа</th>
+                <th scope="col">Размер платежа по телу</th>
+                <th scope="col">Размер платежа по %</th>
+                <th scope="col">Остаток основного долга</th>
+            </tr>
+        </thead>
+        <tbody>
+
+        </tbody>
+        <tfoot>
+            <tr>
+                <th scope="row" colspan="4">Основной платеж (среднее): </th>
+                <th scope="row" colspan="1">Проценты: </th>
+                <th scope="row" colspan="1">Полная сумма выплат: </th>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+
+@section Scripts {
+    <script>
+        const form = document.querySelector('.input_wrapper');
+
+        const formatToTwoDecimal = num => (Math.round(num * 100) / 100).toFixed(2);
+
+        form.addEventListener('submit', e => {
+            e.preventDefault();
+
+            const loanAmount = document.querySelector('input[name="loan-amount"]').value;
+            const loanTerm = document.querySelector('input[name="loan-term"]').value;
+            const loanInterest = document.querySelector('input[name="loan-interest"]').value;
+
+            const calc = $.ajax({
+                type: "GET",
+                url: "/Home/Calculate",
+                dataType: "json",
+                data: {
+                    amount: loanAmount,
+                    term: loanTerm,
+                    interest: loanInterest
+                },
+                success: function (data) {
+                    console.log(data);
+                },
+                error: function (req, status, error) {
+                    console.error(status);
+                }
+            });
+
+            calc.done(result => {
+                const table = document.querySelector('table');          // Таблица
+                const tbody = document.querySelector('tbody');          // Тело таблицы
+                const tfoot = document.querySelector('tfoot');          // Футер таблицы
+                const tfootCells = tfoot.getElementsByTagName('th');    // Ячейки футера таблицы
+
+                // Сначала убираем все что есть в таблице (если юзер захочет нажать на кнопку несколько раз)
+                tbody.textContent = '';
+                tfootCells.textContent = '';
+
+                table.style.display = "table";
+
+                const data = result.value;
+                const numCols = 5;
+
+                const date = new Date();
+
+                for (let j = 0; j < loanTerm; j++) {
+                    // Строка в таблице
+                    let row = document.createElement('tr');
+
+                    // Номер платежа
+                    let td = document.createElement('td');
+                    td.innerHTML = j + 1;
+                    row.appendChild(td);
+
+                    // Дата платежа
+                    const curDate = new Date(date.setMonth(date.getMonth() + 1));
+                    td = document.createElement('td');
+                    td.innerHTML = curDate.toLocaleDateString('ru-RU');
+                    row.appendChild(td);
+                    
+                    // Сумма платежа
+                    td = document.createElement('td');
+                    td.innerHTML = formatToTwoDecimal(data["annualPayment"]);
+                    row.appendChild(td);
+
+                    // Размер платежа по телу
+                    const bodyDebt = formatToTwoDecimal(data["bodyDebts"][j]);
+                    td = document.createElement('td');
+                    td.innerHTML = bodyDebt;
+                    row.appendChild(td);
+
+                    // Размер платежа по %
+                    const percentDebt = formatToTwoDecimal(data["percentDebts"][j]);
+                    td = document.createElement('td');
+                    td.innerHTML = percentDebt;
+                    row.appendChild(td);
+
+                    // Остаток основного долга
+                    const remainderDebt = formatToTwoDecimal(data["remainderDebts"][j]);
+                    td = document.createElement('td');
+                    td.innerHTML = remainderDebt;
+                    row.appendChild(td);
+
+                    // Добавление строки в таблицу
+                    tbody.appendChild(row);
+                }
+
+                // Общая сумма выплат по кредиту
+                const total = formatToTwoDecimal(data["annualPayment"] * loanTerm);
+                // Выплата по процентам
+                const percents = formatToTwoDecimal(data["percentDebts"].reduce((acc, value) => acc + value));
+                // Среднее по основному платежу
+                const avgMain = formatToTwoDecimal(data["bodyDebts"].reduce((acc, value) => acc + value) / loanTerm);
+
+                tfootCells[0].innerHTML += avgMain;
+                tfootCells[1].innerHTML += percents;
+                tfootCells[2].innerHTML += total;
+            });
+        });
+    </script>
+}
